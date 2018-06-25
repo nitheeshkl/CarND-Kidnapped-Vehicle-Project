@@ -134,7 +134,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
             const double dx = x - landmark_x;
             const double dy = y - landmark_y;
             if (dx*dx + dy*dy < sensor_range_2) {
-
+                landmarks_in_range.push_back(LandmarkObs{id,  landmark_x,  landmark_y});
             }
         }
 
