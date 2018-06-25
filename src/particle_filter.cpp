@@ -86,6 +86,25 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
 	// NOTE: this method will NOT be called by the grading code. But you will probably find it useful to 
 	//   implement this method and use it as a helper during the updateWeights phase.
 
+    const unsigned int n_observations = observations.size();
+    const unsigned int n_predictions = predicted.size();
+
+    for (unsigned int i = 0; i < n_observations; i++) {
+        double min_dist = numeric_limits<double>::max();
+        int map_id = -1;
+        // find predictions based on closest distance
+        for (unsigned int j = 0; j < n_predictions; j++) {
+            double x_dist = observations[i].x - predicted[j].x;
+            double y_dist = observations[i].y - predicted[j].y;
+            double dist = x_dist*x_dist + y_dist*y_dist;
+
+            if (dist < min_dist) {
+                min_dist = dist;
+                map_id = predicted[j].id;
+            }
+        }
+        observations[i].id = map_id;
+    }
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 
@@ -100,6 +119,67 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	//   and the following is a good resource for the actual equation to implement (look at equation 
 	//   3.33
 	//   http://planning.cs.uiuc.edu/node99.html
+
+    for (int i = 0; i < num_particles; i++) {
+        const double x = particles[i].x;
+        const double y = particles[i].y;
+        const double theta = particles[i].theta;
+        // find the list of landmarks within the sensors range
+        const double sensor_range_2 = sensor_range * sensor_range; // using squares for comparision below, just to avoid sqrt
+        vector<LandmarkObs> landmarks_in_range;
+        for (unsigned int j = 0; j < map_landmarks.landmark_list.size(); j++) {
+            float landmark_x = map_landmarks.landmark_list[j].x_f;
+            float landmark_y = map_landmarks.landmark_list[j].y_f;
+            int id = map_landmarks.landmark_list[j].id_i;
+            const double dx = x - landmark_x;
+            const double dy = y - landmark_y;
+            if (dx*dx + dy*dy < sensor_range_2) {
+
+            }
+        }
+
+        // transform observation coordinates
+        vector<LandmarkObs> mapped_observations;
+        for (unsigned int j = 0; j < observations.size(); j++) {
+            // transform based on transformation matrix logic
+            const double map_x = cos(theta)*observations[j].x - sin(theta)*observations[j].y + x;
+            const double map_y = sin(theta)*observations[j].x + cos(theta)*observations[j].y + y;
+            mapped_observations.push_back(LandmarkObs{observations[j].id, map_x, map_y});
+        }
+
+        // associate mapped observations to landmarks in range
+        dataAssociation(landmarks_in_range, mapped_observations);
+
+        // reset and calculate weight
+        particles[i].weight = 1.0;
+        for (unsigned int j = 0; j < mapped_observations.size(); j++) {
+            const double x_obs = mapped_observations[j].x;
+            const double y_obs = mapped_observations[j].y;
+            int landmark_id = mapped_observations[j].id;
+
+            double landmark_x, landmark_y;
+            for (unsigned int k = 0; k < landmarks_in_range.size(); k++) {
+                if (landmarks_in_range[k].id == landmark_id) {
+                    landmark_x = landmarks_in_range[k].x;
+                    landmark_y = landmarks_in_range[k].y;
+                    break;
+                }
+            }
+            const double dx = x_obs - landmark_x;
+            const double dy = y_obs - landmark_y;
+            // weight based on Gaussian equation
+            const double weight = ((1/(2*M_PI*std_landmark[0]*std_landmark[1]))
+                                    * exp(-(dx*dx/(2*std_landmark[0]*std_landmark[1])
+                                            + (dy*dy/(2*std_landmark[0]*std_landmark[1])))
+                                        )
+                                  );
+            if (weight == 0) { // avoid zero
+                particles[i].weight *= EPS;
+            } else {
+                particles[i].weight *= weight;
+            }
+        }
+    }
 }
 
 void ParticleFilter::resample() {
